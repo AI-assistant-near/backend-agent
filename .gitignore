@@ -3,3 +3,4 @@
 /tmpdir
 /audios
 /instance
+.env

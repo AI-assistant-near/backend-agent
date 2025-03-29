@@ -1,3 +1,4 @@
+import os
 import re
 import threading
 import numpy as np
@@ -5,6 +6,7 @@ import speech_recognition as sr
 
 from typing import Tuple
 from openai import OpenAI
+from dotenv import load_dotenv
 from difflib import SequenceMatcher
 
 from speechbrain.inference import SpeakerRecognition
@@ -12,10 +14,12 @@ from speechbrain.inference import SpeakerRecognition
 class Agent:
     def __init__(self, api_key: str):
         # Initialize OpenAI client and speech recognizer
-        self.client = OpenAI(
-            base_url="https://openrouter.ai/api/v1",
-            api_key=api_key,
-        )
+        # self.client = OpenAI(
+        #     base_url="https://openrouter.ai/api/v1",
+        #     api_key=api_key,
+        # )
+        self.client = OpenAI(api_key=api_key)
+
         self.recognizer = sr.Recognizer()
         self.speaker_rec = SpeakerRecognition.from_hparams(
             source="speechbrain/spkrec-ecapa-voxceleb", 
@@ -74,7 +78,7 @@ class Agent:
         """
         
         response = self.client.chat.completions.create(
-            model="deepseek/deepseek-r1:free",
+            model="gpt-4o",
             messages=[
                 {"role": "system", "content": "Respond ONLY with the extracted JSON. No reasoning, no notes."},
                 {"role": "user", "content": prompt}
@@ -108,3 +112,9 @@ class Agent:
         return scores
     
     
+
+if __name__ == "__main__":
+    load_dotenv()
+    agent = Agent(os.getenv("LLM_KEY"))
+
+    print(agent.identifying_the_keywords("I want to swap 15 near to zcash"))

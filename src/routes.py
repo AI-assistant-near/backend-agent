@@ -1,15 +1,20 @@
 import os
 import ast
 import uuid
+import asyncio
 import numpy as np
 
 from src import db
 from .models import User
 from .agent import Agent
 from .audio_preprocessor import AudioPreprocessor
+from .near_utils import get_quote
 
+from dotenv import load_dotenv
 from flask import Blueprint, request, jsonify
 # from dstack_sdk import AsyncTappdClient, DeriveKeyResponse, TdxQuoteResponse
+
+load_dotenv()
 
 api = Blueprint("api", __name__)
 
@@ -19,9 +24,9 @@ BASE_DIR = os.path.abspath(
 
 UPLOAD_FOLDER = os.path.join(BASE_DIR, "audios")
 
-API_KEY = "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"
+LLM_KEY = os.getenv("LLM_KEY")
 
-agent = Agent(API_KEY)
+agent = Agent(LLM_KEY)
 
 PHRASES = {
     0: "I love NEAR.",
@@ -29,11 +34,14 @@ PHRASES = {
     2: "I want to trade 15 NEAR to ZCash."
 }
 
-
 @api.route("/", methods=["GET"])
 def root():
     return jsonify({"message": f"The World! Call /derivekey or /tdxquote"})
 
+@api.route("/get_sample_of_quote", methods=["GET"])
+def get_sample_of_quote():
+    print(asyncio.run(get_quote(0.01, True)))
+    return jsonify({})
 
 @api.route("/verify_user", methods=["GET"])
 def verify_user():
