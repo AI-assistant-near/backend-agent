@@ -9,6 +9,7 @@ from .models import User
 from .agent import Agent
 from .audio_preprocessor import AudioPreprocessor
 from .near_utils import get_quote, create_new_near_account
+from .utils import generate_random_sentence_with_nouns
 
 from dotenv import load_dotenv
 from flask import Blueprint, request, jsonify
@@ -124,18 +125,18 @@ def command():
 
     print(informations)
 
-    if informations == dict():
+    if informations == dict() or informations.get("quantity") == None or informations.get("from") == None or informations.get("to") == None:
         return jsonify({"error": "Wasn't possible to identify the params of the swap command"}), 403
-
+    
     os.remove(command_audio_path)
     
     # Here will have the instructions to prepare the swap.
-
+    # quote = get_quote(informations["quantity"], informations["from"] == "near")
     # -----------------------
 
     return jsonify({
-        "message": "succedd",
-        "text": "I love pizza."
+        "text": generate_random_sentence_with_nouns(),
+        "informations": informations
     }), 200
 
 
@@ -162,7 +163,10 @@ def register_user():
     preprocessor = AudioPreprocessor()
     preprocessor.preprocess_parallel([(path, path) for path in voice_paths])
 
-    account_id = uuid.uuid4().hex
+    username = agent.recognize_audio(voice_paths[2]).replace(" ", "-").lower()
+
+    account_id = username + ".zcash-sponsor.near"
+
     new_account_private_key, near_public_key = asyncio.run(create_new_near_account(account_id, 0))
 
     new_user = User(
