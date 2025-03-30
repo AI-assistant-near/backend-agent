@@ -4,7 +4,7 @@ import threading
 import numpy as np
 import speech_recognition as sr
 
-from typing import Tuple
+from typing import Tuple, List
 from openai import OpenAI
 from dotenv import load_dotenv
 from difflib import SequenceMatcher
@@ -46,6 +46,32 @@ class Agent:
             self.cleaning_sentence(text), 
             self.cleaning_sentence(original_sentence)
         ).ratio()
+    
+    def __execute_parallel_recognition(self, filepath, sentence, scores, idx):
+        score = self.verify_text_recognition(filepath, sentence)
+        scores[idx] = score
+        
+    def verify_text_recognition_in_parallel(self, files: List[str], sentences: List[str]):
+        assert len(files) == len(sentences), "The audio files and the sentences has to have the same size."
+
+        threads = []
+
+        scores = {}
+        for idx in range(len(files)):
+            filepath = files[idx]
+            sentence = sentences[idx]
+
+            thread = threading.Thread(
+                target=self.__execute_parallel_recognition, 
+                args=(filepath, sentence, scores, idx)
+            )
+            threads.append(thread)
+            thread.start()
+
+        for thread in threads:
+            thread.join()
+        
+        return scores
 
     def recognize_audio(self, file: str) -> str:
         # Convert speech from an audio file into text

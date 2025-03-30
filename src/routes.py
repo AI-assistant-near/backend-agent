@@ -8,7 +8,7 @@ from src import db
 from .models import User
 from .agent import Agent
 from .audio_preprocessor import AudioPreprocessor
-from .near_utils import get_quote
+from .near_utils import get_quote, create_new_near_account
 
 from dotenv import load_dotenv
 from flask import Blueprint, request, jsonify
@@ -28,22 +28,16 @@ LLM_KEY = os.getenv("LLM_KEY")
 
 agent = Agent(LLM_KEY)
 
-PHRASES = {
-    0: "I love NEAR.",
-    1: "ZCash and NEAR are the best.",
-    2: "I want to trade 15 NEAR to ZCash."
-}
-
 @api.route("/", methods=["GET"])
 def root():
     return jsonify({"message": f"The World! Call /derivekey or /tdxquote"})
 
-@api.route("/get_sample_of_quote", methods=["GET"])
+@api.route("/api/get_sample_of_quote", methods=["GET"])
 def get_sample_of_quote():
     print(asyncio.run(get_quote(0.01, True)))
     return jsonify({})
 
-@api.route("/verify_user", methods=["GET"])
+@api.route("/api/verify_user", methods=["GET"])
 def verify_user():
     data = request.form
     if not data or "wallet_id" not in data:
@@ -93,8 +87,8 @@ def verify_user():
     }), 200
 
 
-@api.route("/quote", methods=["POST"])
-def quote():
+@api.route("/api/command", methods=["POST"])
+def command():
     data = request.form
     if not data or "wallet_id" not in data:
         return jsonify({"error": "Missing wallet_id"}), 400
@@ -114,26 +108,26 @@ def quote():
 
     if file.filename.endswith(".wav"):
         unique_filename = f"{uuid.uuid4().hex}.wav"
-        quote_audio_path = os.path.join(UPLOAD_FOLDER, unique_filename)
+        command_audio_path = os.path.join(UPLOAD_FOLDER, unique_filename)
 
-        file.save(quote_audio_path)
+        file.save(command_audio_path)
     else:
         return jsonify({"error": "Invalid file format. Only .wav files are allowed"}), 401
     
     # Preprocessing audio
-    AudioPreprocessor().preprocess(quote_audio_path, quote_audio_path)
+    AudioPreprocessor().preprocess(command_audio_path, command_audio_path)
 
     # Verify what the user wants
-    sentence = agent.recognize_audio(quote_audio_path)
+    sentence = agent.recognize_audio(command_audio_path)
     print(sentence)
     informations = ast.literal_eval(agent.identifying_the_keywords(sentence))
 
     print(informations)
 
     if informations == dict():
-        return jsonify({"error": "Wasn't possible to identify the params of the swap quote"}), 403
+        return jsonify({"error": "Wasn't possible to identify the params of the swap command"}), 403
 
-    os.remove(quote_audio_path)
+    os.remove(command_audio_path)
     
     # Here will have the instructions to prepare the swap.
 
@@ -145,18 +139,13 @@ def quote():
     }), 200
 
 
-@api.route("/register", methods=["POST"])
+@api.route("/api/register", methods=["POST"])
 def register_user():
     data = request.form
-    if not data or "wallet_id" not in data:
-        return jsonify({"error": "Missing wallet_id"}), 400
-
-    if User.query.filter_by(wallet_id=data["wallet_id"]).first():
-        return jsonify({"error": "User already exists"}), 400
     
-    voice_file_1 = request.files.get("voice_file_1")
-    voice_file_2 = request.files.get("voice_file_2")
-    voice_file_3 = request.files.get("voice_file_3")
+    voice_file_1 = request.files.get("voice_file_0")
+    voice_file_2 = request.files.get("voice_file_1")
+    voice_file_3 = request.files.get("voice_file_2")
 
     voice_files = [voice_file_1, voice_file_2, voice_file_3]
     
@@ -173,8 +162,13 @@ def register_user():
     preprocessor = AudioPreprocessor()
     preprocessor.preprocess_parallel([(path, path) for path in voice_paths])
 
+    account_id = uuid.uuid4().hex
+    new_account_private_key, near_public_key = asyncio.run(create_new_near_account(account_id, 0))
+
     new_user = User(
-        wallet_id=data["wallet_id"], 
+        account_id=account_id, 
+        private_key=new_account_private_key,
+        public_key=near_public_key,
         voiceprint1_path=voice_paths[0], 
         voiceprint2_path=voice_paths[1],
         voiceprint3_path=voice_paths[2]
@@ -185,5 +179,5 @@ def register_user():
 
     return jsonify({
         "message": "User created successfully",
-        "user": {"id": new_user.id, "wallet_id": new_user.wallet_id, "voiceprint_paths": voice_paths}
+        "user": {"id": new_user.id, "account_id": new_user.account_id}
     }), 201
