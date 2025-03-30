@@ -1,7 +1,7 @@
-Money Talks Client
+## Money Talks Client
 Navigating crypto and managing wallets on different chains is complex and tiresome. Money Talk allows you to control your assets via voice, removing the difficult barriers to crypto entry.
 
-How it works
+## How it works
 When first speaking to our AI voice agent, you’ll be registered as a new user and given a NEAR and Zcash account. After funding your brand new account, you can talk to the agent, which uses an LLM to parse your words to call tools provided by the agent to perform specific tasks, such as swapping NEAR for Zcash.
 
 Swapping is happening via intents but the whole process is abstracted. The user is registered in the intents contract, wraps their near, deposits it in the intents contract, finds the best solver to make a swap, performs the swap, and withdraws it to their zcash address in all one action.
