@@ -1,8 +1,10 @@
+
 ## Money Talk: Voice-Controlled Crypto
 
 Navigating crypto and managing wallets across multiple blockchains is often complex and frustrating. Money Talk removes these barriers by letting you control your assets using just your voice. No wallets to configure. No private keys to manage. Just speak.
 
 ⸻
+![image](https://github.com/user-attachments/assets/95024473-f430-443c-9500-c197da7a3b22)
 
 ## 🧠 How It Works
 
