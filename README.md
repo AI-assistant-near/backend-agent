@@ -1,16 +1,58 @@
-## Money Talks Client
-Navigating crypto and managing wallets on different chains is complex and tiresome. Money Talk allows you to control your assets via voice, removing the difficult barriers to crypto entry.
+## Money Talk: Voice-Controlled Crypto
 
-## How it works
-When first speaking to our AI voice agent, you’ll be registered as a new user and given a NEAR and Zcash account. After funding your brand new account, you can talk to the agent, which uses an LLM to parse your words to call tools provided by the agent to perform specific tasks, such as swapping NEAR for Zcash.
+Navigating crypto and managing wallets across multiple blockchains is often complex and frustrating. Money Talk removes these barriers by letting you control your assets using just your voice. No wallets to configure. No private keys to manage. Just speak.
 
-Swapping is happening via intents but the whole process is abstracted. The user is registered in the intents contract, wraps their near, deposits it in the intents contract, finds the best solver to make a swap, performs the swap, and withdraws it to their zcash address in all one action.
+⸻
 
-The signing for the TX happens via Liveness Proof. When the agent recognizes which tokens the user wants to swap, the agent then generates a random phrase for the user to speak, and if the agent recognizes the user (using cosine similarity comparisons with the embedding of the phrases the user spoke when registered), the agent signs the transaction on behalf of the user.
+## 🧠 How It Works
 
-Returning users will be recognised by their voice, and their account details will automatically be loaded up for them.
+When you log in and first speak to our AI voice agent, you’re automatically registered as a new user and provided with NEAR and Zcash accounts.
 
-All of this happens inside of a TEE on the Phala network, meaning that the whole system is running trustlessly with no third-party custody of your private keys, and you do not have to manage your own keys.
+Once your account is funded, you can interact with the agent naturally — just tell it what you want to do. An LLM (Large Language Model) parses your voice input and maps it to the appropriate tools and actions, such as swapping NEAR for Zcash.
+
+⸻
+
+## 🔁 Swapping, Abstracted
+
+Swaps are powered by intents, but the process is fully abstracted for the user. Under the hood, the system:
+	1.	Registers the user in the intents contract
+	2.	Wraps their NEAR tokens
+	3.	Deposits them into the intents contract
+	4.	Finds the best-priced solver to execute the swap
+	5.	Performs the swap
+	6.	Withdraws the resulting assets to the user’s Zcash address
+
+All of that happens in a single, seamless action.
+
+⸻
+
+## 🔐 Secure Signing via Liveness Proof
+
+When the user requests a transaction (e.g. a swap), the agent:
+	1.	Generates a random phrase for the user to speak
+	2.	Compares the spoken phrase’s voice embedding to those recorded at registration using cosine similarity
+	3.	If the voice matches, it signs the transaction on the user’s behalf
+
+This is called liveness proof — a secure, biometric-based signing mechanism.
+
+⸻
+
+## 🔁 Seamless Experience for Returning Users
+
+Returning users are automatically recognized by their voice. Their account data is securely loaded without the need for logins or passwords.
+
+⸻
+
+## 🛡️ Trustless by Design — Powered by Phala
+
+All computation and signing occurs inside a Trusted Execution Environment (TEE) on the Phala Network. Your private keys are never exposed — even we can’t see them. The system is fully trustless, and you never have to manage your own keys.
+
+⸻
+
+## 🧪 Feedback & Observations
+	•	It would be valuable to have an explorer for intents, allowing deeper insight into swap results and status.
+	•	Zcash integration posed some friction — due to the need to run a full node for even simple operations.
+ 
 
 # How to run the agent
 
