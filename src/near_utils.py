@@ -16,7 +16,13 @@ import hashlib
 from borsh_construct import U32
 import secrets
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
+import struct
+import binascii
+import sys
+from bitcoinrpc.authproxy import AuthServiceProxy
+from decimal import Decimal
+
 
 RPC_URL = "https://free.rpc.fastnear.com"
 INTENTS_RPC_URL = "https://solver-relay-v2.chaindefuser.com/rpc"
@@ -399,12 +405,50 @@ async def create_new_near_account(account_id: str, initial_balance: int):
 
     return new_account_private_key, near_public_key
 
-async def create_new_zcash_account(account_id: str, initial_balance: int):
-    # Randomly generate a private key 
+def create_new_zcash_account():
+    """Create a new Zcash account with private key and t-address"""
+    # Generate 32 bytes of random data for private key
+    private_key_bytes = secrets.token_bytes(32)
+    private_key = binascii.hexlify(private_key_bytes).decode('ascii')
     
-    # Generate an address
+    # Create signing key from private key bytes
+    signing_key = nacl.signing.SigningKey(private_key_bytes)
+    verify_key = signing_key.verify_key
+    
+    # Get public key bytes
+    public_key_bytes = verify_key.encode()
+    
+    # RIPEMD160(SHA256(public_key))
+    sha256_hash = hashlib.sha256(public_key_bytes).digest()
+    ripemd160 = hashlib.new('ripemd160')
+    ripemd160.update(sha256_hash)
+    pub_key_hash = ripemd160.digest()
+    
+    # Add version byte for transparent address (0x1CB8 for mainnet)
+    version = b'\x1C\xB8'
+    versioned_hash = version + pub_key_hash
+    
+    # Double SHA256 for checksum
+    checksum = hashlib.sha256(hashlib.sha256(versioned_hash).digest()).digest()[:4]
+    
+    # Combine everything and encode in base58
+    binary_addr = versioned_hash + checksum
+    address = base58.b58encode(binary_addr).decode('ascii')
+    
+    return private_key, address
 
-    return zcash_private_key, zcash_address
+async def send_zcash(from_private_key: str, from_address: str, to_address: str, amount: float):
+    """
+    Send Zcash using GetBlock.io RPC methods
+    
+    Args:
+        from_private_key (str): Private key of sending address
+        from_address (str): Sending Zcash address
+        to_address (str): Receiving Zcash address 
+        amount (float): Amount of ZEC to send
+    """
+
+
 
 
 async def wait_for_account_ready(account, max_attempts=10):
@@ -422,23 +466,126 @@ async def send_near(account, amount, receiver_id):
     yocto_amount = int(amount * 10 ** 24)
     result = await account.send_money(receiver_id, yocto_amount)
 
+async def withdraw_zcash(account_id: str, signer, amount: float, zcash_address: str):
+    """
+    Withdraw ZEC from intents.near to a Zcash address
+    
+    Args:
+        account_id (str): The NEAR account ID performing the withdrawal
+        signer: The signer object for signing the intent
+        amount (float): Amount of ZEC to withdraw
+        zcash_address (str): Destination Zcash address
+    """
+    standard = "nep413"
+    recipient = "intents.near"
+    
+    # Convert ZEC amount to smallest units (Zatoshi, 8 decimals)
+    amount_in_zatoshi = str(int(amount * 10**8))
+    
+    # Create the message object
+    message = {
+        "signer_id": account_id,
+        "deadline": (datetime.utcnow().replace(microsecond=0) + 
+                    timedelta(hours=24)).isoformat() + ".000Z",
+        "intents": [
+            {
+                "intent": "ft_withdraw",
+                "token": "zec.omft.near",
+                "receiver_id": "zec.omft.near",
+                "amount": amount_in_zatoshi,
+                "memo": f"WITHDRAW_TO:{zcash_address}"
+            }
+        ]
+    }
+    
+    message_str = json.dumps(message)
+    nonce = await generate_nonce()
+    nonce_uint8array = base64_to_uint8array(nonce)
+
+    # Create and serialize payload according to NEP-413
+    payload = Payload(message_str, nonce_uint8array, recipient, None)
+    borsh_payload = BinarySerializer(dict(PAYLOAD_SCHEMA)).serialize(payload)
+    
+    # Add the NEP-413 prefix
+    base_int = 2 ** 31 + 413
+    base_int_serialized = U32.build(base_int)
+    combined_data = base_int_serialized + borsh_payload
+    
+    # Hash the data that needs to be signed
+    hash_to_sign = hashlib.sha256(combined_data).digest()
+    
+    # Sign the hash
+    signature_bytes = signer.sign(hash_to_sign)
+    signature = 'ed25519:' + base58.b58encode(signature_bytes).decode('utf-8')
+    public_key = 'ed25519:' + base58.b58encode(signer.public_key).decode('utf-8')
+
+    # Create the intent payload
+    intent = {
+        "id": "dontcare",
+        "jsonrpc": "2.0",
+        "method": "publish_intent",
+        "params": [
+            {
+                "signed_data": {
+                    "standard": standard,
+                    "payload": {
+                        "message": message_str,
+                        "nonce": nonce,
+                        "recipient": recipient
+                    },
+                    "signature": signature,
+                    "public_key": public_key
+                }
+            }
+        ]
+    }
+    
+    print("intent", intent)
+
+    # Send the intent to the RPC endpoint
+    response = requests.post(
+        INTENTS_RPC_URL,
+        json=intent,
+        headers={
+            "Content-Type": "application/json"
+        }
+    )
+
+    if not response.ok:
+        raise Exception(
+            f"Request failed {response.status_code} {response.reason} - {response.text}"
+        )
+
+    json_response = response.json()
+    result = json_response.get("result")
+    
+    return result
+
 async def main():
     # Variables are defined here, this is what you need to fetch from the UI
-    # new_account_name = "account11.zcash-sponsor.near"
-
-    new_account_name = "zcash-sponsor.near"
-    load_dotenv()
-    new_account_private_key = os.getenv('CREATOR_PRIVATE_KEY')
+    new_account_name = "owen.zcash-sponsor.near"
     initial_balance = 50000000000000000000000 # 0.05 NEAR in yoctoNEAR
     near_to_zcash = True # True for NEAR->ZEC, False for ZEC->NEAR
-    amount = 0.01 if near_to_zcash else 0.001 # Amount to swap
+    amount = 0.1 if near_to_zcash else 0.001 # Amount to swap
+
+    # load_dotenv()
+    # new_account_private_key = os.getenv('CREATOR_PRIVATE_KEY')
 
     try:
+        # Create a new zcash account for the user
+        # Make sure to save the private key and address
+        print("\nCreating new zcash account...")
+        (zcash_private_key, zcash_address) = create_new_zcash_account()
+        print(f"New zcash account address: {zcash_address}")
+        print(f"New zcash account private key: {zcash_private_key}")
+
         # Create a new near account for the user
-        # print("\nCreating new account...")
-        # (new_account_private_key, new_account_public_key) = await create_new_near_account(new_account_name, initial_balance)
-        # print(f"New account public key: {new_account_public_key}")
-        # print(f"New account private key: {new_account_private_key}")
+        print("\nCreating new account...")
+        # Create a new near account for the user
+        print("\nCreating new account...")
+        (new_account_private_key, new_account_public_key) = await create_new_near_account(new_account_name, initial_balance)
+        print(f"New account public key: {new_account_public_key}")
+        print(f"New account private key: {new_account_private_key}")
 
         # Create account object for the new account
         new_account = Account(account_id=new_account_name, private_key=new_account_private_key, rpc_addr=RPC_URL)
@@ -452,6 +599,8 @@ async def main():
         # Create signer for intent execution
         key_pair = near_api.signer.KeyPair(new_account_private_key)
         signer = near_api.signer.Signer(new_account_name, key_pair)
+
+        # The account should be funded here
 
         # Register public key
         # Only needed if this is the first swap
@@ -495,20 +644,31 @@ async def main():
         result = await execute_intent(new_account_name, signer, quote)
         print("Intent execution result:", result)
 
+        # Quick fix, wait for intent to execute 
+        await asyncio.sleep(20)
+
         if near_to_zcash:
-            # TODO: Withdraw ZEC
             print("Withdrawing ZEC...")
+            result = await withdraw_zcash(
+                account_id=new_account_name,
+                signer=signer,
+                amount=float(quote['amount_out']) / 10**8,  # Convert from Zatoshi to ZEC
+                zcash_address=zcash_address
+            )
+            print("Withdrawal intent submitted:", result)
         else:
             # TODO: Withdraw NEAR
             print("Withdrawing NEAR...")
             # TODO: Unwrap NEAR
             print("Unwrapping NEAR...")
 
+        # Function to send NEAR 
         await send_near(new_account, 0.01, "account1.zcash-sponsor.near")
+
 
     except Exception as e:
         print(f"Failed to execute intent: {e}")
 
 
 if __name__ == "__main__":
-    asyncio.run(get_quote(0.01, True))
+    asyncio.run(main())

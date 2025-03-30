@@ -15,6 +15,7 @@ RUN apt-get update && apt-get install -y \
     g++ \
     make \
     libffi-dev \
+    ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
 # Prevents Python from writing pyc files.
